@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.15.1/dist/phaser-arcade-physics.min.js"></script>
+</head>
+<body>
+
+  <script>
+  var config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+
+    scene: {
+      preload: preload,
+      create: create,
+      update: update
+    }
+  };
+
+  var game = new Phaser.Game(config)
+  var _this
+  var my_address
+  var button
+  var background
+  var dice_result
+  var attacks = null
+  var attack_finished = false
+  var current_attack = 0
+  var ui_msg
+  var update_lock = false
+
+  function preload ()
+  {
+    this.load.setBaseURL('/');
+
+    this.load.image('sky', 'assets/space3.png');
+    this.load.image('logo', 'assets/phaser3-logo.png');
+    this.load.image('red', 'assets/red.png');
+    this.load.image('button', 'assets/button.png');
+    this.load.image('1', 'assets/1.png');
+    this.load.image('2', 'assets/2.png');
+    this.load.image('3', 'assets/3.png');
+    this.load.image('4', 'assets/4.png');
+    this.load.image('5', 'assets/5.png');
+    this.load.image('6', 'assets/6.png');
+    this.load.image('approve', 'assets/approve.png');
+    
+    this.load.image('attack01', 'assets/gacha/attack/01.png');
+    this.load.image('heal01', 'assets/gacha/heal/01.png');
+
+    this.load.image('dragon-attack', 'assets/gacha/dragon/attack.png');
+    this.load.image('dragon-healthy', 'assets/gacha/dragon/healthy.png');
+    this.load.image('dragon-incapacitated', 'assets/gacha/dragon/incapacitated.png');
+    this.load.image('dragon-injured', 'assets/gacha/dragon/injured.png');
+
+    this.load.image('dragon-attack', 'assets/gacha/dragon/attack.png');
+    this.load.image('dragon-healthy', 'assets/gacha/dragon/healthy.png');
+    this.load.image('dragon-incapacitated', 'assets/gacha/dragon/incapacitated.png');
+    this.load.image('dragon-injured', 'assets/gacha/dragon/injured.png');
+
+    this.load.image('monster-attack', 'assets/gacha/monster/attack.png');
+    this.load.image('monster-healthy', 'assets/gacha/monster/healthy.png');
+    this.load.image('monster-incapacitated', 'assets/gacha/monster/incapacitated.png');
+    this.load.image('monster-injured', 'assets/gacha/monster/injured.png');
+
+    this.load.image('priest-attack', 'assets/gacha/priest/attack.png');
+    this.load.image('priest-healthy', 'assets/gacha/priest/healthy.png');
+    this.load.image('priest-incapacitated', 'assets/gacha/priest/incapacitated.png');
+    this.load.image('priest-injured', 'assets/gacha/priest/injured.png');
+
+    this.load.image('rogue-attack', 'assets/gacha/rogue/attack.png');
+    this.load.image('rogue-healthy', 'assets/gacha/rogue/healthy.png');
+    this.load.image('rogue-incapacitated', 'assets/gacha/rogue/incapacitated.png');
+    this.load.image('rogue-injured', 'assets/gacha/rogue/injured.png');
+
+    this.load.image('warrior-attack', 'assets/gacha/warrior/attack.png');
+    this.load.image('warrior-healthy', 'assets/gacha/warrior/healthy.png');
+    this.load.image('warrior-incapacitated', 'assets/gacha/warrior/incapacitated.png');
+    this.load.image('warrior-injured', 'assets/gacha/warrior/injured.png');
+
+    this.load.image('wizard-attack', 'assets/gacha/wizard/attack.png');
+    this.load.image('wizard-healthy', 'assets/gacha/wizard/healthy.png');
+    this.load.image('wizard-incapacitated', 'assets/gacha/wizard/incapacitated.png');
+    this.load.image('wizard-injured', 'assets/gacha/wizard/injured.png');
+  }
+
+  var characters = []
+
+  function createCharacter(name, initial_x, initial_y, hp) {
+    var character = {
+      name: "character",
+      hp: 1000000,
+      image: null,
+      timeline: null,
+      health_loss_text: null,
+      initial_x: 100,
+      initial_y: 100,
+      current_target: null,
+      current_damage: null,
+      update: () => {
+      },
+      onStartup: (character) => {
+      },
+      onNeutral: (character) => {
+        character.image.setTexture(character.name + '-healthy')
+      },
+      onActive: (character) => {
+        character.image.setTexture(character.name + '-attack')
+        character.current_target.onAttacked(character.current_target)
+      },
+      onCooldown: (character) => {
+        character.image.setTexture(character.name + '-healthy')
+        character.current_target.onNeutral(character.current_target)
+        character.current_target.image.health_loss_text.text = ""
+      }, 
+      onAttacked: (character) => {
+        character.image.setTexture(character.name + '-injured')
+        character.image.health_loss_text.text = ""+(-character.current_damage)
+        character.hp -= character.current_damage
+        character.image.hp_text.text = "hp: " + character.hp
+      }
+    }
+
+    character.name = name
+    character.initial_x = initial_x
+    character.initial_y = initial_y
+    character.hp = hp
+
+    character.image = _this.add.image(character.initial_x, character.initial_y, character.name + '-healthy')
+    character.image.health_loss_text = _this.add.text(character.initial_x - 180, character.initial_y - 50, "", { font: "120px Arial Black", fill: "#c51b7d" })
+    character.image.hp_text = _this.add.text(character.initial_x - 70, character.initial_y + 80, "hp: " + character.hp, { font: "30px Arial Black", fill: "#c51b7d" })
+
+    characters[name] = character
+    return character
+  }
+
+  function create ()
+  {
+    _this = this
+    this.add.image(400, 300, 'sky');
+
+    var particles = this.add.particles('red');
+
+    var emitter = particles.createEmitter({
+      speed: 100,
+      scale: { start: 1, end: 0 },
+      blendMode: 'ADD'
+    });
+    emitter.visible = false
+
+    /*
+    dice_result = this.add.image(400, 100, '6');
+    
+    my_address = this.add.text(20, 50, "Text Objects", { font: "62px Arial Black", fill: "#c51b7d" });
+
+    this.approveBtn = this.add.sprite(600, 500, 'approve').setInteractive();
+    this.approveBtn.on('pointerdown', function (event) {
+      approve()
+    });
+    */
+
+    priest = createCharacter("priest", 100, 100, 10000)
+    warrior = createCharacter("warrior", 250, 200, 10000)
+    wizard = createCharacter("wizard", 100, 350, 10000)
+    rogue = createCharacter("rogue", 250, 450, 10000)
+    dragon = createCharacter("dragon", 700, 300, 500000)
+
+    ui_msg = this.add.text(50, 200, "", { font: "70px Arial Black", fill: "#00FFFF" })
+
+    this.rollBtn = this.add.sprite(700, 50, 'button').setInteractive();
+    this.rollBtn.on('pointerdown', function (event) {
+      roll()
+    });
+  }
+
+  function playMatch()
+  {
+    current_attack = 0
+    processAttack(
+      attacks[current_attack].attacker,
+      attacks[current_attack].attacked,
+      attacks[current_attack].damage)
+    current_attack += 1
+  }
+
+  function processAttack(attacker, attacked, damage)
+  {
+    attacker.current_target = attacked
+    attacker.current_target = attacked
+    attacked.current_damage = damage
+    runAttackAnimation(attacker)
+  }
+
+
+  function runAttackAnimation(character)
+  {
+    var timeline = _this.tweens.createTimeline();
+
+    attack_finished = false
+
+    timeline.add({
+        targets: character.image,
+        x: (character.initial_x + character.current_target.initial_x)/2,
+        y: (character.initial_y + character.current_target.initial_y)/2,
+        ease: 'Power1',
+        duration: 750,
+        onStart: character.onStartup.bind(_this, character)
+    });
+
+    timeline.add({
+        targets: character.image,
+        x: (character.initial_x + character.current_target.initial_x)/2,
+        y: (character.initial_y + character.current_target.initial_y)/2,
+        ease: 'Power1',
+        duration: 1000,
+        onStart: character.onActive.bind(_this, character)
+    });
+
+    timeline.add({
+        targets: character.image,
+        x: character.initial_x,
+        y: character.initial_y,
+        ease: 'Power1',
+        duration: 750,
+        onStart: character.onCooldown.bind(_this, character),
+        onComplete: onAttackFinished.bind(_this)
+    });
+    timeline.play()
+  }
+
+  function onAttackFinished()
+  {
+    attack_finished = true
+  }
+
+  function update() {
+    if(attack_finished)
+    {
+      if(current_attack < attacks.length)
+      {
+        processAttack(
+          attacks[current_attack].attacker,
+          attacks[current_attack].attacked,
+          attacks[current_attack].damage
+        )
+        current_attack += 1
+      } else if(current_attack == attacks.length)
+      {
+        ui_msg.text = "Demo finished"
+        update_lock = false
+        console.log("demo finished")
+        current_attack += 1
+      }
+    }
+  }
+
+  function setDice(result)
+  {
+    dice_result.setTexture(result+1)
+    if(result == 5)
+      my_address.text = "You win 35 TGN!"
+    else
+    my_address.text = ""
+  }
+    </script>
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.3.5/web3.min.js"></script>
+    <script type="text/javascript" src="src/utils.js"></script>
+    <script type="text/javascript" src ="src/index.js"></script>
+</body>
+</html>
